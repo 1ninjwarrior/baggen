@@ -1,0 +1,22 @@
+10
+20
+item0 3 + item8 item3
+item1 2 + item16 item11 item7
+item2 2 + item13
+item3 7 - item9
+item4 7
+item5 8 - item3 item12
+item6 1 - item4 item8
+item7 3 - item18 item0 item14
+item8 5 - item13
+item9 2 + item19 item17 item16
+item10 1
+item11 4 + item10
+item12 1 + item3
+item13 4 + item19 item10 item0
+item14 8 - item4
+item15 7 - item18
+item16 2 + item1 item5
+item17 6 + item8
+item18 7
+item19 4
