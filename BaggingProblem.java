@@ -75,6 +75,8 @@ public class BaggingProblem {
             items.put(name, new Item(name, size, st));
         }
 
+        br.close();
+
         canPackWith = new boolean[items.size()][items.size()];
         for (int x = 0; x < canPackWith.length; x++) Arrays.fill(canPackWith[x], true);
 
