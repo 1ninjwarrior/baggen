@@ -5,8 +5,6 @@ public class BaggingProblem {
     
     List<Bag> bags = new ArrayList<>();
     HashMap<String, Item> items = new HashMap<>();
-    HashMap<String, Set<String>> conflicts = new HashMap<>();
-    HashMap<String, Set<String>> allowedItems = new HashMap<>();
     private long startTime;
     private static final long TIME_LIMIT = 60000; // 60 seconds
 
@@ -120,6 +118,18 @@ public class BaggingProblem {
 
     public boolean search() {
         startTime = System.currentTimeMillis();
+    
+        // Calculate total item size
+        int totalItemSize = items.values().stream().mapToInt(item -> item.size).sum();
+        
+        // Calculate total bag capacity
+        int totalBagCapacity = bags.stream().mapToInt(bag -> bag.maxSize).sum();
+        
+        // Check if total item size exceeds total bag capacity
+        if (totalItemSize > totalBagCapacity) {
+            System.out.println("Total item size exceeds total bag capacity. Packing is impossible.");
+            return false;
+        }
         List<Item> sortedItems = new ArrayList<>(items.values());
         Collections.sort(sortedItems);
         return search(sortedItems, 0);
