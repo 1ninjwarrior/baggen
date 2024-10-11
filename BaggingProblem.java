@@ -3,9 +3,7 @@ import java.io.*;
 
 public class BaggingProblem {
     
-    boolean[][] canPackWith;
     Vector<Bag> bags = new Vector<Bag>();
-
     HashMap<String, Item> items = new HashMap<String, Item>();
 
     public class Item implements Comparable<Item> {
@@ -13,22 +11,20 @@ public class BaggingProblem {
         String name;
         int size;
         Bag myBag = null;
-        StringTokenizer st_constraints;
 
-        public Item(String name, int size, StringTokenizer st_constraints) {
+        public Item(String name, int size) {
             this.id = items.size();
             this.name = name;
             this.size = size;
-            this.st_constraints = st_constraints;
         }
 
         @Override
         public int compareTo(Item i) {
-            return i.size - this.size;
+            return i.size - this.size; // Sort by size (descending)
         }
     }
 
-    public class Bag  {
+    public class Bag {
         int id;
         int maxSize;
         int currSize = 0;
@@ -41,11 +37,6 @@ public class BaggingProblem {
 
         public boolean pack(Item i) {
             if (i.size > maxSize - currSize) return false;
-
-            for (Item j : packedInMe.values()) {
-                if (!canPackWith[i.id][j.id]) return false;
-            }
-
             currSize += i.size;
             packedInMe.put(i.name, i);
             i.myBag = this;
@@ -58,7 +49,7 @@ public class BaggingProblem {
             i.myBag = null;
         }
     }
-    
+
     public BaggingProblem(String filename) throws Exception {
         BufferedReader br = new BufferedReader(new FileReader(filename));
         int nb = Integer.parseInt(br.readLine());
@@ -66,72 +57,43 @@ public class BaggingProblem {
         for (int x = 0; x < nb; x++) bags.add(new Bag(maxBagSize));
 
         String line;
-
         while ((line = br.readLine()) != null) {
             StringTokenizer st = new StringTokenizer(line);
             String name = st.nextToken();
             int size = Integer.parseInt(st.nextToken());
-            if (items.get(name) != null) throw new RuntimeException("Duplicate item name in file");
-            items.put(name, new Item(name, size, st));
-        }
+            if (items.containsKey(name)) throw new RuntimeException("Duplicate item name in file");
 
+            Item item = new Item(name, size);
+            items.put(name, item);
+        }
         br.close();
-
-        canPackWith = new boolean[items.size()][items.size()];
-        for (int x = 0; x < canPackWith.length; x++) Arrays.fill(canPackWith[x], true);
-
-        for (Item i : items.values()) {
-            if (i.st_constraints.hasMoreTokens()) {
-                if (i.st_constraints.nextToken().equals("+")) {
-                    Vector<String> goodStuff = new Vector<String>();
-                    
-                    while (i.st_constraints.hasMoreTokens()) {
-                        goodStuff.add(i.st_constraints.nextToken());
-                    }
-
-                    for (String itemName : items.keySet()) {
-                        if (!goodStuff.contains(itemName)) {
-                            canPackWith[i.id][items.get(itemName).id] = false;
-                            canPackWith[items.get(itemName).id][i.id] = false;
-                        }
-                    }
-                } else {
-                    while (i.st_constraints.hasMoreTokens()) {
-                        Item j = items.get(i.st_constraints.nextToken());
-                        canPackWith[i.id][j.id] = false;
-                        canPackWith[j.id][i.id] = false;
-                    }
-                }
-            }
-        }
     }
 
     public boolean search() {
-        PriorityQueue<Item> pq = new PriorityQueue<>(items.values());
-        return search(pq);
+        PriorityQueue<Item> priorityQueue = new PriorityQueue<>(items.values());
+        return search(priorityQueue);
     }
 
-    private boolean search(PriorityQueue<Item> pq) {
-        if (pq.isEmpty()) return true;
+    private boolean search(PriorityQueue<Item> priorityQueue) {
+        if (priorityQueue.isEmpty()) return true;
 
-        Item i = pq.remove();
-
+        Item mostRestrictiveItem = priorityQueue.poll();
         for (Bag b : bags) {
-            if (b.pack(i)) {
-                if (search(pq)) return true;
-                b.unpack(i);
+            if (b.pack(mostRestrictiveItem)) {
+                if (search(priorityQueue)) return true;
+                b.unpack(mostRestrictiveItem);
             }
         }
 
-        pq.add(i);
+        priorityQueue.add(mostRestrictiveItem);
         return false;
     }
 
     public void printPacking() {
-        System.out.println("success");
+        System.out.println("Success:");
         for (Bag b : bags) {
             if (!b.packedInMe.isEmpty()) {
-                System.out.println(String.join("\t", b.packedInMe.keySet()));
+                System.out.println("Bag " + b.id + ": " + String.join(", ", b.packedInMe.keySet()));
             }
         }
     }
