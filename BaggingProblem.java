@@ -3,24 +3,32 @@ import java.io.*;
 
 public class BaggingProblem {
     
-    Vector<Bag> bags = new Vector<Bag>();
-    HashMap<String, Item> items = new HashMap<String, Item>();
+    List<Bag> bags = new ArrayList<>();
+    HashMap<String, Item> items = new HashMap<>();
+    HashMap<String, Set<String>> conflicts = new HashMap<>();
+    HashMap<String, Set<String>> allowedItems = new HashMap<>();
+    private long startTime;
+    private static final long TIME_LIMIT = 60000; // 60 seconds
 
     public class Item implements Comparable<Item> {
         int id;
         String name;
         int size;
         Bag myBag = null;
+        Set<String> conflictingItems;
+        Set<String> allowedWithItems;
 
         public Item(String name, int size) {
             this.id = items.size();
             this.name = name;
             this.size = size;
+            this.conflictingItems = new HashSet<>();
+            this.allowedWithItems = new HashSet<>();
         }
 
         @Override
         public int compareTo(Item i) {
-            return i.size - this.size; // Sort by size (descending)
+            return i.size - this.size;
         }
     }
 
@@ -28,15 +36,33 @@ public class BaggingProblem {
         int id;
         int maxSize;
         int currSize = 0;
-        HashMap<String, Item> packedInMe = new HashMap<String, Item>();
+        HashMap<String, Item> packedInMe = new HashMap<>();
 
         public Bag(int maxBagSize) {
             this.id = bags.size();
             this.maxSize = maxBagSize;
         }
 
-        public boolean pack(Item i) {
+        public boolean canPack(Item i) {
             if (i.size > maxSize - currSize) return false;
+
+            for (Item j : packedInMe.values()) {
+                if (i.conflictingItems.contains(j.name) || j.conflictingItems.contains(i.name)) {
+                    return false;
+                }
+                if (!i.allowedWithItems.isEmpty() && !i.allowedWithItems.contains(j.name)) {
+                    return false;
+                }
+                if (!j.allowedWithItems.isEmpty() && !j.allowedWithItems.contains(i.name)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        public boolean pack(Item i) {
+            if (!canPack(i)) return false;
+
             currSize += i.size;
             packedInMe.put(i.name, i);
             i.myBag = this;
@@ -61,39 +87,67 @@ public class BaggingProblem {
             StringTokenizer st = new StringTokenizer(line);
             String name = st.nextToken();
             int size = Integer.parseInt(st.nextToken());
+
             if (items.containsKey(name)) throw new RuntimeException("Duplicate item name in file");
 
             Item item = new Item(name, size);
             items.put(name, item);
+
+            if (st.hasMoreTokens()) {
+                String constraintType = st.nextToken();
+                while (st.hasMoreTokens()) {
+                    String constraintItem = st.nextToken();
+                    if (constraintType.equals("+")) {
+                        item.allowedWithItems.add(constraintItem);
+                    } else if (constraintType.equals("-")) {
+                        item.conflictingItems.add(constraintItem);
+                    }
+                }
+            }
         }
         br.close();
+
+        // Pre-process items to add reverse constraints
+        for (Item item : items.values()) {
+            for (String conflictingItem : item.conflictingItems) {
+                Item otherItem = items.get(conflictingItem);
+                if (otherItem != null) {
+                    otherItem.conflictingItems.add(item.name);
+                }
+            }
+        }
     }
 
     public boolean search() {
-        PriorityQueue<Item> priorityQueue = new PriorityQueue<>(items.values());
-        return search(priorityQueue);
+        startTime = System.currentTimeMillis();
+        List<Item> sortedItems = new ArrayList<>(items.values());
+        Collections.sort(sortedItems);
+        return search(sortedItems, 0);
     }
 
-    private boolean search(PriorityQueue<Item> priorityQueue) {
-        if (priorityQueue.isEmpty()) return true;
+    private boolean search(List<Item> sortedItems, int index) {
+        if (System.currentTimeMillis() - startTime > TIME_LIMIT) {
+            System.out.println("Time limit exceeded");
+            return false;
+        }
 
-        Item mostRestrictiveItem = priorityQueue.poll();
+        if (index == sortedItems.size()) return true;
+
+        Item currentItem = sortedItems.get(index);
         for (Bag b : bags) {
-            if (b.pack(mostRestrictiveItem)) {
-                if (search(priorityQueue)) return true;
-                b.unpack(mostRestrictiveItem);
+            if (b.pack(currentItem)) {
+                if (search(sortedItems, index + 1)) return true;
+                b.unpack(currentItem);
             }
         }
 
-        priorityQueue.add(mostRestrictiveItem);
         return false;
     }
 
     public void printPacking() {
-        System.out.println("Success:");
         for (Bag b : bags) {
             if (!b.packedInMe.isEmpty()) {
-                System.out.println("Bag " + b.id + ": " + String.join(", ", b.packedInMe.keySet()));
+                System.out.println(String.join("\t", b.packedInMe.keySet()));
             }
         }
     }
@@ -102,6 +156,7 @@ public class BaggingProblem {
         try {
             BaggingProblem bp = new BaggingProblem(args[0]);
             if (bp.search()) {
+                System.out.println("success");
                 bp.printPacking();
             } else {
                 System.out.println("failure");
