@@ -7,14 +7,23 @@ public class BagIt {
             }
             
             BaggingProblem bp = new BaggingProblem(args[0]);
-            if (bp.search()) {
+            
+            long startTime = System.nanoTime();
+            boolean result = bp.search();
+            long endTime = System.nanoTime();
+            
+            if (result) {
+                System.out.println("Success");
                 bp.printPacking();
             } else {
-                System.out.println("failure");
+                System.out.println("Failure");
             }
+            
+            double durationInSeconds = (endTime - startTime) / 1e9;
+            System.out.printf("Time taken: %.6f seconds%n", durationInSeconds);
         } catch (Exception e) {
             System.err.println("Error: " + e.getMessage());
-            System.exit(1);
+            e.printStackTrace();
         }
     }
 }
