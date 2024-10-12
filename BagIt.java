@@ -13,10 +13,10 @@ public class BagIt {
             long endTime = System.nanoTime();
             
             if (result) {
-                System.out.println("Success");
+                System.out.println("success");
                 bp.printPacking();
             } else {
-                System.out.println("Failure");
+                System.out.println("failure");
             }
             
             double durationInSeconds = (endTime - startTime) / 1e9;
