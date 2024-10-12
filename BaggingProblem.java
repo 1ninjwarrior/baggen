@@ -5,127 +5,127 @@ import java.util.stream.Collectors;
 public class BaggingProblem {
     private List<Bag> bags = new ArrayList<>();
     private Map<String, Item> items = new HashMap<>();
-    private Map<Item, List<Bag>> domains = new HashMap<>();
+    private Map<Item, List<Bag>> itemToCompatibleBags = new HashMap<>();
 
     public class Item implements Comparable<Item> {
         String name;
         int size;
-        Bag myBag = null;
+        Bag assignedBag = null;
         Set<String> conflictingItems;
-        Set<String> allowedWithItems;
+        Set<String> compatibleItems;
 
         public Item(String name, int size) {
             this.name = name;
             this.size = size;
             this.conflictingItems = new HashSet<>();
-            this.allowedWithItems = new HashSet<>();
+            this.compatibleItems = new HashSet<>();
         }
 
         @Override
-        public int compareTo(Item i) {
-            return i.size - this.size;
+        public int compareTo(Item otherItem) {
+            return otherItem.size - this.size;
         }
     }
 
     public class Bag {
         String name;
-        int maxSize;
-        int currSize = 0;
-        Map<String, Item> packedInMe = new HashMap<>();
+        int maxCapacity;
+        int currentCapacity = 0;
+        Map<String, Item> itemsPacked = new HashMap<>();
 
-        public Bag(String name, int maxBagSize) {
+        public Bag(String name, int maxCapacity) {
             this.name = name;
-            this.maxSize = maxBagSize;
+            this.maxCapacity = maxCapacity;
         }
 
-        public boolean canPack(Item i) {
-            if (i.size > maxSize - currSize) return false;
+        public boolean canPack(Item item) {
+            if (item.size > maxCapacity - currentCapacity) return false;
 
-            for (Item j : packedInMe.values()) {
-                if (i.conflictingItems.contains(j.name) || j.conflictingItems.contains(i.name)) {
+            for (Item packedItem : itemsPacked.values()) {
+                if (item.conflictingItems.contains(packedItem.name) || packedItem.conflictingItems.contains(item.name)) {
                     return false;
                 }
-                if (!i.allowedWithItems.isEmpty() && !i.allowedWithItems.contains(j.name)) {
+                if (!item.compatibleItems.isEmpty() && !item.compatibleItems.contains(packedItem.name)) {
                     return false;
                 }
-                if (!j.allowedWithItems.isEmpty() && !j.allowedWithItems.contains(i.name)) {
+                if (!packedItem.compatibleItems.isEmpty() && !packedItem.compatibleItems.contains(item.name)) {
                     return false;
                 }
             }
             return true;
         }
 
-        public boolean pack(Item i) {
-            if (!canPack(i)) return false;
+        public boolean packItem(Item item) {
+            if (!canPack(item)) return false;
 
-            currSize += i.size;
-            packedInMe.put(i.name, i);
-            i.myBag = this;
+            currentCapacity += item.size;
+            itemsPacked.put(item.name, item);
+            item.assignedBag = this;
             return true;
         }
 
-        public void unpack(Item i) {
-            packedInMe.remove(i.name);
-            currSize -= i.size;
-            i.myBag = null;
+        public void unpackItem(Item item) {
+            itemsPacked.remove(item.name);
+            currentCapacity -= item.size;
+            item.assignedBag = null;
         }
     }
 
     public BaggingProblem(String filename) throws Exception {
-        BufferedReader br = new BufferedReader(new FileReader(filename));
-        int nb = Integer.parseInt(br.readLine());
-        int maxBagSize = Integer.parseInt(br.readLine());
-        for (int x = 0; x < nb; x++) bags.add(new Bag("bag" + x, maxBagSize));
+        BufferedReader reader = new BufferedReader(new FileReader(filename));
+        int numberOfBags = Integer.parseInt(reader.readLine());
+        int maxBagCapacity = Integer.parseInt(reader.readLine());
+        for (int i = 0; i < numberOfBags; i++) bags.add(new Bag("bag" + i, maxBagCapacity));
 
         String line;
-        while ((line = br.readLine()) != null) {
-            StringTokenizer st = new StringTokenizer(line);
-            String name = st.nextToken();
-            int size = Integer.parseInt(st.nextToken());
+        while ((line = reader.readLine()) != null) {
+            StringTokenizer tokenizer = new StringTokenizer(line);
+            String itemName = tokenizer.nextToken();
+            int itemSize = Integer.parseInt(tokenizer.nextToken());
 
-            if (items.containsKey(name)) throw new RuntimeException("Duplicate item name in file");
+            if (items.containsKey(itemName)) throw new RuntimeException("Duplicate item name in file");
 
-            Item item = new Item(name, size);
-            items.put(name, item);
+            Item item = new Item(itemName, itemSize);
+            items.put(itemName, item);
 
-            if (st.hasMoreTokens()) {
-                String constraintType = st.nextToken();
-                while (st.hasMoreTokens()) {
-                    String constraintItem = st.nextToken();
+            if (tokenizer.hasMoreTokens()) {
+                String constraintType = tokenizer.nextToken();
+                while (tokenizer.hasMoreTokens()) {
+                    String constraintItem = tokenizer.nextToken();
                     if (constraintType.equals("+")) {
-                        item.allowedWithItems.add(constraintItem);
+                        item.compatibleItems.add(constraintItem);
                     } else if (constraintType.equals("-")) {
                         item.conflictingItems.add(constraintItem);
                     }
                 }
             }
         }
-        br.close();
+        reader.close();
 
-        initializeDomains();
+        initializeItemDomains();
     }
 
-    private void initializeDomains() {
-        domains = new HashMap<>();
+    private void initializeItemDomains() {
+        itemToCompatibleBags = new HashMap<>();
         for (Item item : items.values()) {
             List<Bag> compatibleBags = bags.stream()
                 .filter(bag -> bag.canPack(item))
                 .collect(Collectors.toList());
-            domains.put(item, compatibleBags);
+            itemToCompatibleBags.put(item, compatibleBags);
         }
     }
 
-    public boolean search() {
+    public boolean solve() {
         if (getTotalItemSize() > getTotalBagCapacity()) {
             System.out.println("Total item size exceeds total bag capacity. Packing is impossible.");
             return false;
         }
 
-        if (!nodeConsistency()) {
+        if (!ensureNodeConsistency()) {
             return false;
         }
 
-        if (!arcConsistency()) {
+        if (!ensureArcConsistency()) {
             return false;
         }
 
@@ -138,20 +138,20 @@ public class BaggingProblem {
     }
 
     private int getTotalBagCapacity() {
-        return bags.stream().mapToInt(bag -> bag.maxSize).sum();
+        return bags.stream().mapToInt(bag -> bag.maxCapacity).sum();
     }
 
-    private boolean nodeConsistency() {
+    private boolean ensureNodeConsistency() {
         for (Item item : items.values()) {
-            domains.get(item).removeIf(bag -> !bag.canPack(item));
-            if (domains.get(item).isEmpty()) {
+            itemToCompatibleBags.get(item).removeIf(bag -> !bag.canPack(item));
+            if (itemToCompatibleBags.get(item).isEmpty()) {
                 return false;
             }
         }
         return true;
     }
 
-    private boolean arcConsistency() {
+    private boolean ensureArcConsistency() {
         Queue<Arc> queue = new LinkedList<>();
         for (Item item1 : items.values()) {
             for (Item item2 : items.values()) {
@@ -163,8 +163,8 @@ public class BaggingProblem {
 
         while (!queue.isEmpty()) {
             Arc arc = queue.poll();
-            if (revise(arc)) {
-                if (domains.get(arc.item1).isEmpty()) {
+            if (reviseArc(arc)) {
+                if (itemToCompatibleBags.get(arc.item1).isEmpty()) {
                     return false;
                 }
                 for (Item neighbor : items.values()) {
@@ -177,14 +177,14 @@ public class BaggingProblem {
         return true;
     }
 
-    private boolean revise(Arc arc) {
+    private boolean reviseArc(Arc arc) {
         boolean revised = false;
-        List<Bag> domain1 = domains.get(arc.item1);
+        List<Bag> domain1 = itemToCompatibleBags.get(arc.item1);
         List<Bag> toRemove = new ArrayList<>();
 
         for (Bag bag1 : domain1) {
             boolean hasSupport = false;
-            for (Bag bag2 : domains.get(arc.item2)) {
+            for (Bag bag2 : itemToCompatibleBags.get(arc.item2)) {
                 if (bag1 != bag2 || bag1.canPack(arc.item1) && bag1.canPack(arc.item2)) {
                     hasSupport = true;
                     break;
@@ -205,34 +205,34 @@ public class BaggingProblem {
             return true;
         }
 
-        Item item = selectUnassignedItem(unassignedItems);
-        for (Bag bag : orderDomainValues(item)) {
-            if (bag.pack(item)) {
+        Item item = selectNextItem(unassignedItems);
+        for (Bag bag : orderBagsForItem(item)) {
+            if (bag.packItem(item)) {
                 List<Item> newUnassignedItems = new ArrayList<>(unassignedItems);
                 newUnassignedItems.remove(item);
                 if (backtrack(newUnassignedItems)) {
                     return true;
                 }
-                bag.unpack(item);
+                bag.unpackItem(item);
             }
         }
 
         return false;
     }
 
-    private Item selectUnassignedItem(List<Item> unassignedItems) {
+    private Item selectNextItem(List<Item> unassignedItems) {
         return Collections.min(unassignedItems, Comparator
-            .<Item>comparingInt(item -> domains.get(item).size())
+            .<Item>comparingInt(item -> itemToCompatibleBags.get(item).size())
             .thenComparingInt(item -> -item.conflictingItems.size())
-            .thenComparingInt(item -> -item.allowedWithItems.size())
+            .thenComparingInt(item -> -item.compatibleItems.size())
             .thenComparingInt(item -> -item.size));
     }
 
-    private List<Bag> orderDomainValues(Item item) {
-        return domains.get(item).stream()
+    private List<Bag> orderBagsForItem(Item item) {
+        return itemToCompatibleBags.get(item).stream()
             .sorted(Comparator
-                .comparingInt((Bag b) -> -b.packedInMe.size())
-                .thenComparingInt(b -> b.maxSize - b.currSize)) 
+                .comparingInt((Bag b) -> -b.itemsPacked.size())
+                .thenComparingInt(b -> b.maxCapacity - b.currentCapacity)) 
             .collect(Collectors.toList());
     }
 
@@ -247,19 +247,19 @@ public class BaggingProblem {
     }
 
     public void printPacking() {
-        for (Bag b : bags) {
-            if (!b.packedInMe.isEmpty()) {
-                System.out.println(String.join("\t", b.packedInMe.keySet()));
+        for (Bag bag : bags) {
+            if (!bag.itemsPacked.isEmpty()) {
+                System.out.println(String.join("\t", bag.itemsPacked.keySet()));
             }
         }
     }
 
     public static void main(String[] args) {
         try {
-            BaggingProblem bp = new BaggingProblem(args[0]);
-            if (bp.search()) {
+            BaggingProblem baggingProblem = new BaggingProblem(args[0]);
+            if (baggingProblem.solve()) {
                 System.out.println("success");
-                bp.printPacking();
+                baggingProblem.printPacking();
             } else {
                 System.out.println("failure");
             }

@@ -9,7 +9,7 @@ public class BagIt {
             BaggingProblem bp = new BaggingProblem(args[0]);
             
             long startTime = System.nanoTime();
-            boolean result = bp.search();
+            boolean result = bp.solve();
             long endTime = System.nanoTime();
             
             if (result) {
