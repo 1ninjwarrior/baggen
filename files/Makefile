@@ -1,20 +1,20 @@
 # Variables
 JAVAC = javac
 JAVA = java
-MAIN_CLASS = BagIt
+MAIN_CLASS = files.BagIt
 SOURCES = $(wildcard *.java)
 CLASSES = $(SOURCES:.java=.class)
 
 # Default target
 all: $(CLASSES)
 
-# Compile Java files
-%.class: %.java
-	$(JAVAC) $<
+# Compile all Java files
+$(CLASSES): $(SOURCES)
+	$(JAVAC) $(SOURCES)
 
 # Run the application
 run: all
-	$(JAVA) $(MAIN_CLASS)
+	$(JAVA) -cp . $(MAIN_CLASS)
 
 # Clean up class files
 clean:
