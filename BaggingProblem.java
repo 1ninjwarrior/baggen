@@ -1,10 +1,11 @@
 import java.util.*;
 import java.io.*;
+import java.util.stream.Collectors;
 
 public class BaggingProblem {
     private List<Bag> bags = new ArrayList<>();
     private Map<String, Item> items = new HashMap<>();
-    private Map<Item, List<Bag>> compatibleBags = new HashMap<>();
+    private Map<Item, List<Bag>> domains = new HashMap<>();
 
     public class Item implements Comparable<Item> {
         String name;
@@ -101,56 +102,35 @@ public class BaggingProblem {
         }
         br.close();
 
-        updateCompatibleBags();
+        initializeDomains();
     }
 
-    private void updateCompatibleBags() {
+    private void initializeDomains() {
+        domains = new HashMap<>();
         for (Item item : items.values()) {
-            List<Bag> compatible = new ArrayList<>();
-
-            for (Bag bag : bags) {
-                if (bag.canPack(item)) {
-                    compatible.add(bag);
-                }
-            }
-
-            compatible.sort(Comparator.comparingInt(b -> b.packedInMe.size()));
-            compatibleBags.put(item, compatible);
+            List<Bag> compatibleBags = bags.stream()
+                .filter(bag -> bag.canPack(item))
+                .collect(Collectors.toList());
+            domains.put(item, compatibleBags);
         }
     }
 
     public boolean search() {
-    
         if (getTotalItemSize() > getTotalBagCapacity()) {
             System.out.println("Total item size exceeds total bag capacity. Packing is impossible.");
             return false;
         }
-        List<Item> sortedItems = sortItems();
-        return search(sortedItems, 0);
-    }
 
-    private List<Item> sortItems() {
-        List<Item> sortedItems = new ArrayList<>(items.values());
-        sortedItems.sort((i1, i2) -> {
-            int conflictComparison = Integer.compare(i2.conflictingItems.size(), i1.conflictingItems.size());
-            return (conflictComparison != 0) ? conflictComparison : Integer.compare(i1.size, i2.size);
-        });
-        return sortedItems;
-    }
-
-    private boolean search(List<Item> sortedItems, int index) {
-
-        if (index == sortedItems.size()) return true;
-
-        Item currentItem = sortedItems.get(index);
-        for (Bag bag : compatibleBags.get(currentItem)) {
-            if (bag.pack(currentItem)) {
-                if (search(sortedItems, index + 1)) return true;
-                bag.unpack(currentItem);
-            }
+        if (!nodeConsistency()) {
+            return false;
         }
 
-        return false;
+        if (!arcConsistency()) {
+            return false;
+        }
+
+        List<Item> unassignedItems = new ArrayList<>(items.values());
+        return backtrack(unassignedItems);
     }
 
     private int getTotalItemSize() {
@@ -159,6 +139,111 @@ public class BaggingProblem {
 
     private int getTotalBagCapacity() {
         return bags.stream().mapToInt(bag -> bag.maxSize).sum();
+    }
+
+    private boolean nodeConsistency() {
+        for (Item item : items.values()) {
+            domains.get(item).removeIf(bag -> !bag.canPack(item));
+            if (domains.get(item).isEmpty()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean arcConsistency() {
+        Queue<Arc> queue = new LinkedList<>();
+        for (Item item1 : items.values()) {
+            for (Item item2 : items.values()) {
+                if (item1 != item2) {
+                    queue.add(new Arc(item1, item2));
+                }
+            }
+        }
+
+        while (!queue.isEmpty()) {
+            Arc arc = queue.poll();
+            if (revise(arc)) {
+                if (domains.get(arc.item1).isEmpty()) {
+                    return false;
+                }
+                for (Item neighbor : items.values()) {
+                    if (neighbor != arc.item1 && neighbor != arc.item2) {
+                        queue.add(new Arc(neighbor, arc.item1));
+                    }
+                }
+            }
+        }
+        return true;
+    }
+
+    private boolean revise(Arc arc) {
+        boolean revised = false;
+        List<Bag> domain1 = domains.get(arc.item1);
+        List<Bag> toRemove = new ArrayList<>();
+
+        for (Bag bag1 : domain1) {
+            boolean hasSupport = false;
+            for (Bag bag2 : domains.get(arc.item2)) {
+                if (bag1 != bag2 || bag1.canPack(arc.item1) && bag1.canPack(arc.item2)) {
+                    hasSupport = true;
+                    break;
+                }
+            }
+            if (!hasSupport) {
+                toRemove.add(bag1);
+                revised = true;
+            }
+        }
+
+        domain1.removeAll(toRemove);
+        return revised;
+    }
+
+    private boolean backtrack(List<Item> unassignedItems) {
+        if (unassignedItems.isEmpty()) {
+            return true;
+        }
+
+        Item item = selectUnassignedItem(unassignedItems);
+        for (Bag bag : orderDomainValues(item)) {
+            if (bag.pack(item)) {
+                List<Item> newUnassignedItems = new ArrayList<>(unassignedItems);
+                newUnassignedItems.remove(item);
+                if (backtrack(newUnassignedItems)) {
+                    return true;
+                }
+                bag.unpack(item);
+            }
+        }
+
+        return false;
+    }
+
+    private Item selectUnassignedItem(List<Item> unassignedItems) {
+        return Collections.min(unassignedItems, Comparator
+            .<Item>comparingInt(item -> domains.get(item).size())
+            .thenComparingInt(item -> -item.conflictingItems.size())
+            .thenComparingInt(item -> -item.allowedWithItems.size())
+            .thenComparingInt(item -> -item.size));
+    }
+
+    private List<Bag> orderDomainValues(Item item) {
+        return domains.get(item).stream()
+            .sorted(Comparator
+                .comparingInt((Bag b) -> -b.packedInMe.size())
+                .thenComparingInt(b -> b.maxSize - b.currSize)) 
+            .collect(Collectors.toList());
+    }
+
+    private static class Arc {
+        Item item1;
+        Item item2;
+
+        Arc(Item item1, Item item2) {
+            this.item1 = item1;
+            this.item2 = item2;
+        }
     }
 
     public void printPacking() {
@@ -180,7 +265,7 @@ public class BaggingProblem {
             }
         } catch (Exception e) {
             System.err.println("Error: " + e.getMessage());
-            System.exit(1);
+            e.printStackTrace();
         }
     }
 }
