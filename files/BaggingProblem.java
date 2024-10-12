@@ -119,7 +119,6 @@ public class BaggingProblem {
 
     public boolean solve() {
         if (getTotalItemSize() > getTotalBagCapacity()) {
-            System.out.println("Total item size exceeds total bag capacity. Packing is impossible.");
             return false;
         }
 
