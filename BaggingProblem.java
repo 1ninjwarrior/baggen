@@ -2,17 +2,11 @@ import java.util.*;
 import java.io.*;
 
 public class BaggingProblem {
-    
-    List<Bag> bags = new ArrayList<>();
-    HashMap<String, Item> items = new HashMap<>();
-    private long startTime;
-    private static final long TIME_LIMIT = 10000; // 10 seconds
-    HashMap<Item, List<Bag>> compatibleBags = new HashMap<>();
-    HashMap<Item, HashSet<String>> itemConflicts = new HashMap<>();
-    HashMap<Bag, HashSet<String>> bagConflicts = new HashMap<>();
+    private List<Bag> bags = new ArrayList<>();
+    private Map<String, Item> items = new HashMap<>();
+    private Map<Item, List<Bag>> compatibleBags = new HashMap<>();
 
     public class Item implements Comparable<Item> {
-        int id;
         String name;
         int size;
         Bag myBag = null;
@@ -20,7 +14,6 @@ public class BaggingProblem {
         Set<String> allowedWithItems;
 
         public Item(String name, int size) {
-            this.id = items.size();
             this.name = name;
             this.size = size;
             this.conflictingItems = new HashSet<>();
@@ -34,15 +27,13 @@ public class BaggingProblem {
     }
 
     public class Bag {
-        int id;
         String name;
         int maxSize;
         int currSize = 0;
-        HashMap<String, Item> packedInMe = new HashMap<>();
+        Map<String, Item> packedInMe = new HashMap<>();
 
-        public Bag(int maxBagSize) {
-            this.id = bags.size();
-            this.name = "bag" + id;
+        public Bag(String name, int maxBagSize) {
+            this.name = name;
             this.maxSize = maxBagSize;
         }
 
@@ -83,7 +74,7 @@ public class BaggingProblem {
         BufferedReader br = new BufferedReader(new FileReader(filename));
         int nb = Integer.parseInt(br.readLine());
         int maxBagSize = Integer.parseInt(br.readLine());
-        for (int x = 0; x < nb; x++) bags.add(new Bag(maxBagSize));
+        for (int x = 0; x < nb; x++) bags.add(new Bag("bag" + x, maxBagSize));
 
         String line;
         while ((line = br.readLine()) != null) {
@@ -110,88 +101,64 @@ public class BaggingProblem {
         }
         br.close();
 
-        // Initialize item conflicts
-        for (Item item : items.values()) {
-            itemConflicts.put(item, new HashSet<>(item.conflictingItems));
-        }
-
-        // Initialize bag conflicts
-        for (Bag bag : bags) {
-            bagConflicts.put(bag, new HashSet<>()); // Assuming bags have a way to track conflicts
-        }
-
-        // Sort items using MRV
-        List<Item> sortedItems = new ArrayList<>(items.values());
-        sortedItems.sort((i1, i2) -> {
-            int conflictComparison = Integer.compare(itemConflicts.get(i2).size(), itemConflicts.get(i1).size());
-            if (conflictComparison != 0) return conflictComparison;
-            return Integer.compare(i1.size, i2.size);
-        });
-
-        // Update compatible bags based on constraints
         updateCompatibleBags();
-
-        // Start search
-        search(sortedItems, 0);
     }
 
     private void updateCompatibleBags() {
         for (Item item : items.values()) {
-            Set<String> conflicts = itemConflicts.get(item);
             List<Bag> compatible = new ArrayList<>();
 
             for (Bag bag : bags) {
-                if (bag.canPack(item) && !conflicts.contains(bag.name)) {
+                if (bag.canPack(item)) {
                     compatible.add(bag);
                 }
             }
 
-            // Sort bags using LCV
-            compatible.sort((b1, b2) -> {
-                int b1Constraints = bagConflicts.get(b1).size();
-                int b2Constraints = bagConflicts.get(b2).size();
-                return Integer.compare(b1Constraints, b2Constraints);
-            });
-
+            compatible.sort(Comparator.comparingInt(b -> b.packedInMe.size()));
             compatibleBags.put(item, compatible);
         }
     }
 
     public boolean search() {
-        startTime = System.currentTimeMillis();
     
-        //Make sure the weight of all items isn't more than the total capacity
-        int totalItemSize = items.values().stream().mapToInt(item -> item.size).sum();
-        int totalBagCapacity = bags.stream().mapToInt(bag -> bag.maxSize).sum();
-        
-        if (totalItemSize > totalBagCapacity) {
+        if (getTotalItemSize() > getTotalBagCapacity()) {
             System.out.println("Total item size exceeds total bag capacity. Packing is impossible.");
             return false;
         }
-        List<Item> sortedItems = new ArrayList<>(items.values());
-        Collections.sort(sortedItems);
+        List<Item> sortedItems = sortItems();
         return search(sortedItems, 0);
     }
 
+    private List<Item> sortItems() {
+        List<Item> sortedItems = new ArrayList<>(items.values());
+        sortedItems.sort((i1, i2) -> {
+            int conflictComparison = Integer.compare(i2.conflictingItems.size(), i1.conflictingItems.size());
+            return (conflictComparison != 0) ? conflictComparison : Integer.compare(i1.size, i2.size);
+        });
+        return sortedItems;
+    }
+
     private boolean search(List<Item> sortedItems, int index) {
-        if (System.currentTimeMillis() - startTime > TIME_LIMIT) {
-            System.out.println("Time limit exceeded");
-            return false;
-        }
 
         if (index == sortedItems.size()) return true;
 
         Item currentItem = sortedItems.get(index);
-        List<Bag> compatible = compatibleBags.get(currentItem);
-
-        for (Bag b : compatible) {
-            if (b.pack(currentItem)) {
+        for (Bag bag : compatibleBags.get(currentItem)) {
+            if (bag.pack(currentItem)) {
                 if (search(sortedItems, index + 1)) return true;
-                b.unpack(currentItem);
+                bag.unpack(currentItem);
             }
         }
 
         return false;
+    }
+
+    private int getTotalItemSize() {
+        return items.values().stream().mapToInt(item -> item.size).sum();
+    }
+
+    private int getTotalBagCapacity() {
+        return bags.stream().mapToInt(bag -> bag.maxSize).sum();
     }
 
     public void printPacking() {
