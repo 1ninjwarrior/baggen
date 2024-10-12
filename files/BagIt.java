@@ -1,3 +1,4 @@
+package files;
 public class BagIt {
     public static void main(String[] args) {
         try {
